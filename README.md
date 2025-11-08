@@ -11,4 +11,4 @@ The corresponding manuscript is Kim, Basu, and Banerjee ([2025](#ref-hotspot))
 
 <div id="ref-hotspot" class="references">
 
-Younghoon Kim, Sumanta Basu, and Samprit Banerjee. 2025. “Identification of Emotionally Stressful Periods Through Tracking Changes in Statistical Features of mHealth Data.” *In preparation*
+Younghoon Kim, Sumanta Basu, and Samprit Banerjee. 2025. “Identification of Emotionally Stressful Periods Through Tracking Changes in Statistical Features of mHealth Data.” *Preprint*
