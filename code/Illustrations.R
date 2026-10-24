@@ -63,7 +63,7 @@ plot_Y <- ggplot(data.frame(Time = 1:n, Value = yt), aes(x = Time, y = Value)) +
              linetype = 1, color = "red") +
   scale_x_continuous(breaks = seq(0, n, by = 10)) +
   scale_y_continuous(breaks = 1:5) +
-  labs(y = "Stress", x = NULL) +
+  labs(y = "Self-reported stress (1–5)", x = NULL) +
   theme_minimal() +
   theme(panel.grid.minor = element_blank())
 plot_Z <- ggplot(data.frame(Time = 1:n, Value = zt), aes(x = Time, y = Value)) +
@@ -71,7 +71,7 @@ plot_Z <- ggplot(data.frame(Time = 1:n, Value = zt), aes(x = Time, y = Value)) +
   geom_vline(xintercept = 50 + runif(1,-0.2,0.2),
              linetype = 1, color = "red") +
   scale_x_continuous(breaks = seq(0, n, by = 10)) +
-  labs(y = "Continuous Stress", x = NULL) +
+  labs(y = "Continuous stress", x = NULL) +
   theme_minimal(base_size = 14) +
   theme(panel.grid.minor = element_blank())
 plot_X <- ggplot(data.frame(Time = 1:n, Value = xt), aes(x = Time, y = Value)) +
@@ -79,12 +79,12 @@ plot_X <- ggplot(data.frame(Time = 1:n, Value = xt), aes(x = Time, y = Value)) +
   geom_vline(xintercept = 45 + runif(1,-0.2,0.2),
              linetype = 1, color = "red") +
   scale_x_continuous(breaks = seq(0, n, by = 10)) +
-  labs(y = "Passive Sensing", x = "Time") +
+  labs(y = "Passive sensing", x = "Day") +
   theme_minimal(base_size = 14) +
   theme(panel.grid.minor = element_blank())
 
 
-pdf("example_samplepath1.pdf", width = 13, height = 11)
+pdf("example_samplepath1.pdf", width = 11, height = 9)
 plot_Y/plot_Z/plot_X
 dev.off()
 
@@ -124,36 +124,34 @@ CI_YX2 <- bivariate_mosum_ci(zt,xt,bi_refinement=Bi_MOSUM$YX2,
                              alpha=0.05,epsilon=0.2,eta=0.2)
 
 
-# Hotspots:
-hotspot_thres <- get_intervals(sort(unique(intersect(unique(c(Bi_MOSUM$YX$idx_cand,
-                                                              Bi_MOSUM$YX2$idx_cand)),
-                                                     Bi_MOSUM$Y_both$idx_cand))))
-hotspot_ci <- get_union_of_intersects(
-  c(CI_YX$ptwise,CI_YX2$ptwise),
-  CI_Y$ptwise,type="ptwise")
+# ------------------------------------------------------ #
+# Hotspots: Example 1
+# Y mean change + X mean/variance changes
+# ------------------------------------------------------ #
+# Thresholding rule
+cross_threshold_points <- sort(unique(c(Bi_MOSUM$YX$idx_cand,Bi_MOSUM$YX2$idx_cand)))
+Y_threshold_points <- sort(unique(Bi_MOSUM$Y_both$idx_cand))
+threshold_points <- intersect(cross_threshold_points,Y_threshold_points)
+hotspot_thres <- points_to_intervals(threshold_points,n = n)
 
+# CI rule
+# If using the revised pointwise-CI functions, CI_YX, CI_YX2, and CI_Y are already lists of intervals.
+cross_CI_union <- union_interval_sets(CI_YX$ptwise,CI_YX2$ptwise,n = n)
+hotspot_ci <- intersect_interval_sets(cross_CI_union,CI_Y$ptwise,n = n)
 hotspot_thres
 hotspot_ci
 
-# Thresholds:
-max_G <- function(g, WE, WV) {
-  Tt <- length(WE)
-  LE <- (WE[(2*g+1):(n)] - 2*WE[(1+g):(n-g)] + WE[1:(n-2*g)])/sqrt(2*g)
-  LV <- (WV[(2*g+1):(n)] - 2*WV[(1+g):(n-g)] + WV[1:(n-2*g)])/sqrt(2*g)
-  max(sqrt(LE^2 + LV^2))
-}
-sim_global_max <- function(n, G) {
-  WE <- cumsum(rnorm(n))
-  WV <- cumsum(rnorm(n))
-  maxL_H <- vapply(as.matrix(G), FUN = max_G, WE = WE, 
-                   WV = WV, numeric(length(1)))
-  max(maxL_H)
-}
-
+# ------------------------------------------------------ #
+# Threshold used in the figure
+# Calibrated at the same G used by Bi-MOSUM
+# ------------------------------------------------------ #
 alpha <- 0.05
 G <- 20
-G_seq <- seq(G,min((n-1)/2,200),10)
-Dn <- quantile(replicate(1000, sim_global_max(n=n, G=G_seq)), 1-alpha)
+B_threshold <- 1000
+
+set.seed(20261012)
+Dn <- unname(quantile(replicate(B_threshold,max_bi_mosum_null(n = n, G = G)),
+                      probs = 1 - alpha, type = 1))
 jit_max <- 0.2
 
 
@@ -205,7 +203,7 @@ pl_joint <- ggplot(df_joint_long, aes(x = Time, y = Value,
                                            "X both" = rgb(0, 0, 1, 0.2))) +
   scale_linetype_manual(name="Type",values = c("Y both" = 1, "X both" = 2)) +
   scale_x_continuous(breaks = seq(0, n, by = 10)) +
-  labs(y = "Dist", x = "Time") +
+  labs(y = "Dist", x = "Day") +
   theme_minimal(base_size = 14) +
   theme(legend.position = "bottom",
         panel.grid.minor = element_blank())
@@ -226,12 +224,12 @@ pl_bi <- ggplot(df_bi_long, aes(x = Time, y = Value,
   scale_fill_manual(name="Type",values = c("YX" = rgb(0.6, 0, 0.8, 0.2), "YX2" = rgb(0, 1, 0, 0.2))) +
   scale_linetype_manual(name="Type",values = c("YX" = 3, "YX2" = 4)) +
   scale_x_continuous(breaks = seq(0, n, by = 10)) +
-  labs(y = "Dist", x = "Time") +
+  labs(y = "Dist", x = "Day") +
   theme_minimal(base_size = 14) +
   theme(legend.position = "bottom",
         panel.grid.minor = element_blank())
 
-pdf("example_result1.pdf", width = 13, height = 11)
+pdf("example_result1.pdf", width = 11, height = 9)
 pl_joint / pl_bi
 dev.off()
 
@@ -273,7 +271,7 @@ plot_Y <- ggplot(data.frame(Time = 1:n, Value = yt), aes(x = Time, y = Value)) +
              linetype = c(1,2), color = "red") +
   scale_x_continuous(breaks = seq(0, n, by = 10)) +
   scale_y_continuous(breaks = 1:5) +
-  labs(y = "Stress", x = NULL) +
+  labs(y = "Self-reported stress (1–5)", x = NULL) +
   theme_minimal() +
   theme(panel.grid.minor = element_blank())
 plot_Z <- ggplot(data.frame(Time = 1:n, Value = zt), aes(x = Time, y = Value)) +
@@ -281,7 +279,7 @@ plot_Z <- ggplot(data.frame(Time = 1:n, Value = zt), aes(x = Time, y = Value)) +
   geom_vline(xintercept = c(45,65) + runif(2,-0.2,0.2),
              linetype = c(1,2), color = "red") +
   scale_x_continuous(breaks = seq(0, n, by = 10)) +
-  labs(y = "Continuous Stress", x = NULL) +
+  labs(y = "Continuous stress", x = NULL) +
   theme_minimal(base_size = 14) +
   theme(panel.grid.minor = element_blank())
 plot_X <- ggplot(data.frame(Time = 1:n, Value = xt), aes(x = Time, y = Value)) +
@@ -289,12 +287,12 @@ plot_X <- ggplot(data.frame(Time = 1:n, Value = xt), aes(x = Time, y = Value)) +
   geom_vline(xintercept = c(40,60) + runif(2,-0.2,0.2),
              linetype = c(1,2), color = "red") +
   scale_x_continuous(breaks = seq(0, n, by = 10)) +
-  labs(y = "Passive Sensing", x = "Time") +
+  labs(y = "Passive sensing", x = "Day") +
   theme_minimal(base_size = 14) +
   theme(panel.grid.minor = element_blank())
 
 
-pdf("example_samplepath2.pdf", width = 13, height = 11)
+pdf("example_samplepath2.pdf", width = 11, height = 9)
 plot_Y/plot_Z/plot_X
 dev.off()
 
@@ -307,8 +305,8 @@ dist_Y <- Bi_MOSUM$Y_track$Dist
 dist_X <- Bi_MOSUM$X_track$Dist
 
 # All boths:
-dist_Y2X <- Bi_MOSUM$bi_track$Dist_YX
-dist_Y2X2 <- Bi_MOSUM$bi_track$Dist_YX2
+dist_Y2X <- Bi_MOSUM$bi_track$Dist_Y2X
+dist_Y2X2 <- Bi_MOSUM$bi_track$Dist_Y2X2
 
 time_list_full <- list()
 time_list_full$Y_both <- if (!is.null(Bi_MOSUM$Y_both$cpt_eta)) Bi_MOSUM$Y_both$idx_cand else integer(0)
@@ -334,39 +332,34 @@ CI_Y2X2 <- bivariate_mosum_ci(zt,xt,bi_refinement=Bi_MOSUM$Y2X2,
                               alpha=0.05,epsilon=0.2,eta=0.2)
 
 
-# Hotspots:
-hotspot_thres <- get_intervals(sort(unique(intersect(unique(c(Bi_MOSUM$Y2X$idx_cand,
-                                                              Bi_MOSUM$Y2X2$idx_cand)),
-                                                     Bi_MOSUM$Y_both$idx_cand))))
-hotspot_ci <- get_union_of_intersects(
-  c(CI_Y2X$ptwise,CI_Y2X2$ptwise),
-  CI_Y$ptwise,type="ptwise")
+# ------------------------------------------------------ #
+# Hotspots: Example 2
+# Y variance change + X mean/variance changes
+# ------------------------------------------------------ #
+# Thresholding rule
+cross_threshold_points <- sort(unique(c(Bi_MOSUM$Y2X$idx_cand,Bi_MOSUM$Y2X2$idx_cand)))
+Y_threshold_points <- sort(unique(Bi_MOSUM$Y_both$idx_cand))
+threshold_points <- intersect(cross_threshold_points, Y_threshold_points)
+hotspot_thres <- points_to_intervals(threshold_points,n = n)
 
+# CI rule
+cross_CI_union <- union_interval_sets(CI_Y2X$ptwise,CI_Y2X2$ptwise,n = n)
+hotspot_ci <- intersect_interval_sets(cross_CI_union,CI_Y$ptwise,n = n)
 hotspot_thres
 hotspot_ci
 
-
-# Thresholds:
-max_G <- function(g, WE, WV) {
-  Tt <- length(WE)
-  LE <- (WE[(2*g+1):(n)] - 2*WE[(1+g):(n-g)] + WE[1:(n-2*g)])/sqrt(2*g)
-  LV <- (WV[(2*g+1):(n)] - 2*WV[(1+g):(n-g)] + WV[1:(n-2*g)])/sqrt(2*g)
-  max(sqrt(LE^2 + LV^2))
-}
-sim_global_max <- function(n, G) {
-  WE <- cumsum(rnorm(n))
-  WV <- cumsum(rnorm(n))
-  maxL_H <- vapply(as.matrix(G), FUN = max_G, WE = WE, 
-                   WV = WV, numeric(length(1)))
-  max(maxL_H)
-}
-
+# ------------------------------------------------------ #
+# Threshold used in the figure
+# Calibrated at the same G used by Bi-MOSUM
+# ------------------------------------------------------ #
 alpha <- 0.05
 G <- 20
-G_seq <- seq(G,min((n-1)/2,200),10)
-Dn <- quantile(replicate(1000, sim_global_max(n=n, G=G_seq)), 1-alpha)
-jit_max <- 0.2
+B_threshold <- 1000
 
+set.seed(20261012)
+Dn <- unname(quantile(replicate(B_threshold,max_bi_mosum_null(n = n, G = G)),
+                      probs = 1 - alpha, type = 1))
+jit_max <- 0.2
 
 # data frame
 df_joint <- data.frame(Time = 1:n,
@@ -414,7 +407,7 @@ pl_joint <- ggplot(df_joint_long, aes(x = Time, y = Value,
                                            "X both" = rgb(0, 0, 1, 0.2))) +
   scale_linetype_manual(name="Type",values = c("Y both" = 1, "X both" = 2)) +
   scale_x_continuous(breaks = seq(0, n, by = 10)) +
-  labs(y = "Dist", x = "Time") +
+  labs(y = "Dist", x = "Day") +
   theme_minimal(base_size = 14) +
   theme(legend.position = "bottom",
         panel.grid.minor = element_blank())
@@ -435,12 +428,12 @@ pl_bi <- ggplot(df_bi_long, aes(x = Time, y = Value,
   scale_fill_manual(name="Type",values = c("Y2X" = rgb(0.6, 0, 0.8, 0.2), "Y2X2" = rgb(0, 1, 0, 0.2))) +
   scale_linetype_manual(name="Type",values = c("Y2X" = 3, "Y2X2" = 4)) +
   scale_x_continuous(breaks = seq(0, n, by = 10)) +
-  labs(y = "Dist", x = "Time") +
+  labs(y = "Dist", x = "Day") +
   theme_minimal(base_size = 14) +
   theme(legend.position = "bottom",
         panel.grid.minor = element_blank())
 
 
-pdf("example_result2.pdf", width = 13, height = 11)
+pdf("example_result2.pdf", width = 11, height = 9)
 pl_joint / pl_bi
 dev.off()

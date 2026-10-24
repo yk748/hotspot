@@ -1,3 +1,152 @@
+max_bi_mosum_null <- function(n, G) {
+  
+  WE <- cumsum(rnorm(n))
+  WV <- cumsum(rnorm(n))
+  
+  LE <- (
+    WE[(2 * G + 1):n] -
+      2 * WE[(G + 1):(n - G)] +
+      WE[1:(n - 2 * G)]
+  ) / sqrt(2 * G)
+  
+  LV <- (
+    WV[(2 * G + 1):n] -
+      2 * WV[(G + 1):(n - G)] +
+      WV[1:(n - 2 * G)]
+  ) / sqrt(2 * G)
+  
+  max(sqrt(LE^2 + LV^2))
+}
+
+normalize_intervals <- function(intervals, n) {
+  
+  if (is.null(intervals) || length(intervals) == 0) {
+    return(list())
+  }
+  
+  if (is.numeric(intervals) && length(intervals) == 2) {
+    intervals <- list(intervals)
+  }
+  
+  out <- list()
+  
+  for (z in intervals) {
+    
+    if (is.null(z) || length(z) < 2 ||
+        any(!is.finite(z[1:2]))) {
+      next
+    }
+    
+    left <- max(1L, as.integer(ceiling(min(z[1:2]))))
+    right <- min(n, as.integer(floor(max(z[1:2]))))
+    
+    if (left <= right) {
+      out[[length(out) + 1L]] <- c(left, right)
+    }
+  }
+  
+  if (length(out) == 0) {
+    return(list())
+  }
+  
+  ord <- order(vapply(out, `[`, numeric(1), 1))
+  out <- out[ord]
+  
+  merged <- list(out[[1]])
+  
+  if (length(out) >= 2) {
+    for (j in 2:length(out)) {
+      
+      last <- merged[[length(merged)]]
+      cur <- out[[j]]
+      
+      if (cur[1] <= last[2] + 1L) {
+        merged[[length(merged)]] <-
+          c(last[1], max(last[2], cur[2]))
+      } else {
+        merged[[length(merged) + 1L]] <- cur
+      }
+    }
+  }
+  
+  merged
+}
+
+
+points_to_intervals <- function(x, n) {
+  
+  if (is.null(x) || length(x) == 0) {
+    return(list())
+  }
+  
+  x <- sort(unique(as.integer(x)))
+  x <- x[is.finite(x) & x >= 1 & x <= n]
+  
+  if (length(x) == 0) {
+    return(list())
+  }
+  
+  breaks <- c(0L, which(diff(x) > 1L), length(x))
+  
+  intervals <- lapply(
+    seq_len(length(breaks) - 1L),
+    function(j) {
+      c(
+        x[breaks[j] + 1L],
+        x[breaks[j + 1L]]
+      )
+    }
+  )
+  
+  normalize_intervals(intervals, n)
+}
+
+
+union_interval_sets <- function(..., n) {
+  
+  sets <- list(...)
+  all_intervals <- list()
+  
+  for (s in sets) {
+    s <- normalize_intervals(s, n)
+    
+    if (length(s) > 0) {
+      all_intervals <- c(all_intervals, s)
+    }
+  }
+  
+  normalize_intervals(all_intervals, n)
+}
+
+
+intersect_interval_sets <- function(A, B, n) {
+  
+  A <- normalize_intervals(A, n)
+  B <- normalize_intervals(B, n)
+  
+  if (length(A) == 0 || length(B) == 0) {
+    return(list())
+  }
+  
+  intersections <- list()
+  
+  for (a in A) {
+    for (b in B) {
+      
+      left <- max(a[1], b[1])
+      right <- min(a[2], b[2])
+      
+      if (left <= right) {
+        intersections[[length(intersections) + 1L]] <-
+          c(left, right)
+      }
+    }
+  }
+  
+  normalize_intervals(intersections, n)
+}
+
+
 ############################################
 # Bivariate MOSUM (Bi-MOSUM) tracker:
 ############################################
@@ -111,7 +260,7 @@ bivariate_tracker <- function(series1_track,series2_track,n,Gl,Gr){
       rho_YX[k] <- Cov_YX_bar[k]/sqrt(S2_Y_bar[k] * S2_X_bar[k])
       Gamma_YX <- diag(1,2); Gamma_YX[1,2] <- Gamma_YX[2,1] <- rho_YX[k]
       Dist_YX[k] <- sqrt(t(c(T1_Y[k],T1_X[k])) %*% solve(Gamma_YX) %*% c(T1_Y[k],T1_X[k]))
-      pval_YX[k] <- 1-pchisq(Dist_YX[k],df=2)
+      pval_YX[k] <- 1-pchisq(Dist_YX[k]^2,df=2)
       
       # Y2X
       Cov_Y2X_bar[k] <- mean( ((yt[(n-(Gl+Gr)+1):n] - Y_bar)^2-S2_Y_bar[k])*(xt[(n-(Gl+Gr)+1):n] - X_bar) )
@@ -332,29 +481,29 @@ refinements <- function(test_stat,type,n,Gl,Gr,alpha,epsilon,eta){
     bn <- 2*log(n/G) + 0.5*log(log(n/G)) + log(3/2) - 0.5*log(pi)
     c_alpha <- -log(log(1/sqrt(1-alpha)))
     Dn <- (bn + c_alpha)/an
+    
   }else{
     # ------------------------------------------------------ #
-    # Thresholds:
-    G <- mean(c(Gl,Gr))
+    # Threshold:
+    if (Gl != Gr){
+      stop("Monte Carlo threshold calibration currently assumes Gl = Gr.")
+    }
+    
+    G <- Gl
+    
     max_G <- function(g, WE, WV) {
-      Tt <- length(WE)
-      LE <- (WE[(2*g+1):(n)] - 2*WE[(1+g):(n-g)] + WE[1:(n-2*g)])/sqrt(2*g)
-      LV <- (WV[(2*g+1):(n)] - 2*WV[(1+g):(n-g)] + WV[1:(n-2*g)])/sqrt(2*g)
+      LE <- (WE[(2*g+1):n] - 2*WE[(1+g):(n-g)] + WE[1:(n-2*g)])/sqrt(2*g)
+      LV <- (WV[(2*g+1):n] - 2*WV[(1+g):(n-g)] + WV[1:(n-2*g)])/sqrt(2*g)
       max(sqrt(LE^2 + LV^2))
     }
     sim_global_max <- function(n, G) {
       WE <- cumsum(rnorm(n))
       WV <- cumsum(rnorm(n))
-      maxL_G <- vapply(as.matrix(G), FUN = max_G, WE = WE, 
-                       WV = WV, numeric(length(1)))
-      max(maxL_G)
+      max_G(G, WE, WV)
     }
-    
-    G_seq <- seq(25,min((n-1)/2,200),25)
-    Dn <- quantile(replicate(1000, sim_global_max(n=n, G=G_seq)), 1-alpha)
+    Dn <- quantile(replicate(1000, sim_global_max(n=n, G=G)),1-alpha)
   }
-  
-  idx_cand <- which(abs(test_stat)>=Dn) 
+  idx_cand <- which(abs(test_stat) >= Dn)
   
   # ---------------------------------------------------- #
   # Epsilon-criterion: significant neighborhoods
@@ -471,7 +620,7 @@ bivariate_mosum_ci <- function(series_Y,series_X,bi_refinement,
       nbh_k <- max((k_index[k]-G+1),1):min((k_index[k]+G),n)
       if (moment == "mean_mean"){
         sample_cps[k-1] <- which.max(abs(initial_rep[[iter]]$Dist_YX[nbh_k])) + (k_index[k]-G)
-      }else if (moment == "mean_mean"){
+      }else if (moment == "mean_var"){
         sample_cps[k-1] <- which.max(abs(initial_rep[[iter]]$Dist_YX2[nbh_k])) + (k_index[k]-G)
       }else if (moment == "var_mean"){
         sample_cps[k-1] <- which.max(abs(initial_rep[[iter]]$Dist_Y2X[nbh_k])) + (k_index[k]-G)
@@ -671,8 +820,8 @@ joint_mosum_ci <- function(series,refinement,
     
     S2_bar <- 1/2*(S2_prv + S2_pst)
     
-    series_bar4_prv <- mean( ((series[prev_j] - S2_prv)^2 - S2_prv)^2 )
-    series_bar4_pst <- mean( ((series[post_j] - S2_pst)^2 - S2_pst)^2 )
+    series_bar4_prv <- mean(((series[prev_j] - series_bar_prv)^2 - S2_prv)^2)
+    series_bar4_pst <- mean(((series[post_j] - series_bar_pst)^2 - S2_pst)^2)
     
     V2_bar <- 1/2*(series_bar4_prv + series_bar4_pst)
     
