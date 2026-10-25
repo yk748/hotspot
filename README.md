@@ -105,9 +105,9 @@ The stress-only and circular-shift analyses are descriptive diagnostics. They do
 
 ## Reference
 
-**Accepted journal article**
+**Published journal article**
 
-Kim, Y., Basu, S., & Banerjee, S. (in press). Identification of Temporal Hotspots of Distributional Change in Stress and Passive mHealth Data. *Sensors*.
+**Kim, Y.**, Basu, S., & Banerjee, S. (2026). Identification of Temporal Hotspots of Distributional Change in Stress and Passive mHealth Data. *Sensors*, 26(21), 6739.
 
 **Earlier preprint**
 
